@@ -18,8 +18,6 @@ if (chatsettings.ContainsKey("requestUrl")&&chatsettings.ContainsKey("TelegramBo
         });
     }
     ChatService service = new ChatService(client,new HttpResponseMessage(),settings);
-    TelegramBotService botService = new TelegramBotService(settings,settings.questionMessage,service);
-    await botService.StartWorkingAsync();
 }
 
 Console.WriteLine("Неверное имя ключей в файле настроек appsettings.json");

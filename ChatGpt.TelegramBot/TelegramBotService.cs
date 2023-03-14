@@ -1,33 +1,35 @@
-using ChatGPT.Models;
-using ChatGPT.Services.abstractions;
+using ChatGpt.Application.Services;
+using ChatGpt.Domain.Models;
 using Newtonsoft.Json;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
-using Telegram.Bot.Types.ReplyMarkups;
 using Telegram.Bot.Types.Enums;
-namespace ChatGPT.Services;
+using Telegram.Bot.Types.ReplyMarkups;
 
-public class TelegramBotService:ITelegramBotService
+namespace ChatGpt.TelegramBot;
+
+public class TelegramBotService
 {
-    private string databasePath = Directory.GetCurrentDirectory()+"/UsersDatabase.json";
+    // private string databasePath = Directory.GetCurrentDirectory()+"/UsersDatabase.json";
     private readonly TelegramBotClient botClient;
     private readonly SettingsServices _settings;
-    private readonly QuestionMessage _questionMessage;
     private long myId;
-    public List<Client> Users =default;
-    private Dictionary<string, DateTime> userLastMessage = new Dictionary<string, DateTime>();
-
+    // public List<Client> Users =default;
+    // private Dictionary<string, DateTime> userLastMessage = new Dictionary<string, DateTime>();
     private readonly ChatService _service;
+    private readonly ImgService _imgService;
+    private readonly AdminWorkService _adminservice;
 
 
-    public TelegramBotService(SettingsServices settings,QuestionMessage questionMessage,ChatService service)
+    public TelegramBotService(SettingsServices settings,ImgService imgService,AdminWorkService adminservice,ChatService service)
     {
         
         _settings = settings;
-        _questionMessage = questionMessage;
         _service = service;
+        _imgService = imgService;
+        _adminservice = adminservice;
         botClient = new TelegramBotClient(settings.ChatServiceSettings["TelegramBotToken"]);
         
     }
@@ -66,30 +68,30 @@ public class TelegramBotService:ITelegramBotService
     }
     async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
     {   
-        Users = await GetFromDataBaseAsync();
-        if (update.Message is not { } message)
-            return;
-        if (message.Text is not { } messageText)
-            return;
-        var chatId = message.Chat.Id;
-        if (Users!=null&&Users.Count > 0&&chatId!=null)
-       {
-            var selectedUser = Users.FirstOrDefault(x => x.ChatId == chatId);    
-             
-            if (selectedUser == null)
-            {
-                Users.Add(new Client() {ChatId = update.Message.Chat.Id,FirstName = update.Message.Chat.FirstName,LastName = update.Message.Chat.LastName,UserName = update.Message.Chat.Username });
-              await  SaveToDatabaseAsync();
-            }
-       } 
-        if(Users.Count == 0)
-       {
-            Users.Add(new Client() { ChatId = update.Message.Chat.Id, FirstName = update.Message.Chat.FirstName, LastName = update.Message.Chat.LastName, UserName = update.Message.Chat.Username });
-            await  SaveToDatabaseAsync();   
-       }
+       //  Users = await GetFromDataBaseAsync();
+       if (update.Message is not { } message)
+           return;
+       if (message.Text is not { } messageText)
+           return;
+       var chatId = message.Chat.Id;
+       //  if (Users!=null&&Users.Count > 0&&chatId!=null)
+       // {
+       //      var selectedUser = Users.FirstOrDefault(x => x.ChatId == chatId);    
+       //       
+       //      if (selectedUser == null)
+       //      {
+       //          Users.Add(new Client() {ChatId = update.Message.Chat.Id,FirstName = update.Message.Chat.FirstName,LastName = update.Message.Chat.LastName,UserName = update.Message.Chat.Username });
+       //        await  SaveToDatabaseAsync();
+       //      }
+       // } 
+       //  if(Users.Count == 0)
+       // {
+       //      Users.Add(new Client() { ChatId = update.Message.Chat.Id, FirstName = update.Message.Chat.FirstName, LastName = update.Message.Chat.LastName, UserName = update.Message.Chat.Username });
+       //      await  SaveToDatabaseAsync();   
+       // }
         if (update.Message.Chat.Id == myId)
         {
-            await AdminWorkAsync(botClient,update);
+            await _adminservice.AdminWorkAsync(botClient,update);
             return;
         }
         
@@ -100,25 +102,16 @@ public class TelegramBotService:ITelegramBotService
          {
              if (messageText != "/start")
              {
-                
-
-                 if (!IsTimeOut(message.From.Id.ToString()))
+                 if (messageText.Contains("/img"))
                  {
-                     await botClient.SendTextMessageAsync(message.Chat.Id, "Вам нужно подождать 30 секунд перед тем, как отправить следующее сообщение!");
-                     return;
-                 }else
-                 {
-                     var a =  await  botClient.SendTextMessageAsync(chatId, "⌛");
-                     _questionMessage.prompt = messageText;
-                     await     _service.SendMessageAsync(_questionMessage);
-                     await      botClient.DeleteMessageAsync(chatId,a.MessageId );
-                     await botClient.SendTextMessageAsync(chatId,_service.GetResult(),replyToMessageId:message.MessageId);
+                     await  _imgService.SendMessage(botClient, update);
                  }
-             }else
+                 await  _service.SendMessage(botClient, update);
+                 return;
+             }
+             else
              {
-                 
-                     await botClient.SendTextMessageAsync(chatId, "Добрый день напишите свой вопрос!");
-
+                 await botClient.SendTextMessageAsync(chatId, "Добрый день напишите свой вопрос!");
              }
          }
          catch (Telegram.Bot.Exceptions.ApiRequestException ex)when( ex.Message.Contains("bot was blocked by the user"))
@@ -146,7 +139,7 @@ public class TelegramBotService:ITelegramBotService
         return Task.CompletedTask;
     }
 
-    async Task SaveToDatabaseAsync()
+ /*   async Task SaveToDatabaseAsync()
     {
         var json = JsonConvert.SerializeObject(Users);
         await System.IO.File.WriteAllTextAsync(databasePath,json);
@@ -227,5 +220,5 @@ public class TelegramBotService:ITelegramBotService
         userLastMessage[userId] = DateTime.Now; 
         
         return true;
-    }
+    }*/
 }
